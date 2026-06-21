@@ -21,10 +21,16 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    // Handle token expiry globally — redirect to login
     if (error.response?.status === 401 && typeof window !== 'undefined') {
+      const requestUrl = (error.config as { url?: string })?.url ?? '';
       const path = window.location.pathname;
-      if (path !== '/login' && path !== '/register') {
+
+      // Skip redirect for the background session check — AuthContext handles it silently
+      const isSessionCheck = requestUrl.includes('/auth/me');
+      const isAuthPage = path === '/login' || path === '/register';
+
+      if (!isSessionCheck && !isAuthPage) {
+        // Token expired mid-session — boot the user to login
         window.location.href = '/login';
       }
     }

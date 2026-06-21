@@ -12,10 +12,11 @@ export const generateToken = (id: string): string => {
 };
 
 export const sendTokenCookie = (res: Response, token: string): void => {
+  const isProduction = env.NODE_ENV === 'production';
   res.cookie('token', token, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: isProduction,           // Must be true when sameSite is 'none'
+    sameSite: isProduction ? 'none' : 'lax', // 'none' allows cross-origin (Render ↔ Vercel)
     maxAge: COOKIE_MAX_AGE,
   });
 };

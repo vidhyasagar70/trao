@@ -13,9 +13,19 @@ const app = express();
 connectDB();
 
 // ─── Middlewares ───────────────────────────────────────────────────────────────
+// Support multiple allowed origins via comma-separated CLIENT_URL
+const allowedOrigins = env.CLIENT_URL.split(',').map((o) => o.trim());
+
 app.use(
   cors({
-    origin: env.CLIENT_URL,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g., mobile apps, curl)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
     credentials: true, // Required for cookies
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
