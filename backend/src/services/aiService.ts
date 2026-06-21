@@ -110,6 +110,9 @@ JSON FORMAT:
 }
 `;
 
+// Gemini call timeout — abort if API hangs for more than 90 s
+const GEMINI_TIMEOUT_MS = 90_000;
+
 // ─── Call Gemini API ──────────────────────────────────────────────────────────
 const callGemini = async (
   destination: string,
@@ -117,8 +120,9 @@ const callGemini = async (
   budgetType: BudgetType,
   interests: string[]
 ): Promise<GeminiResponse> => {
+  // gemini-1.5-flash: fast (5–15 s), reliable JSON output — ideal for trip generation
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-1.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.7,
@@ -127,7 +131,19 @@ const callGemini = async (
   });
 
   const prompt = buildPrompt(destination, days, budgetType, interests);
-  const result = await model.generateContent(prompt);
+
+  // Race Gemini against a hard timeout so a slow response falls back gracefully
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+  let result;
+  try {
+    result = await model.generateContent(
+      { contents: [{ role: 'user', parts: [{ text: prompt }] }] },
+      { signal: controller.signal }
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const text = result.response.text();
 
   // Strip any accidental markdown code fences
@@ -375,7 +391,7 @@ export const generateTripPlan = async (
         budget,
         packingChecklist,
         generatedBy: 'gemini' as GenerationSource,
-        generationModel: 'gemini-2.5-flash',
+        generationModel: 'gemini-1.5-flash',
       };
     } catch (geminiError: unknown) {
       // ─── Print FULL error so you can diagnose exactly what went wrong ───────
@@ -421,7 +437,7 @@ export const regenerateSingleDay = async (
   if (env.GEMINI_API_KEY) {
     try {
       const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash', // Fast model for single-day regeneration
         generationConfig: { responseMimeType: 'application/json', temperature: 0.9 },
       });
 
@@ -441,7 +457,18 @@ Return ONLY valid JSON for a single day object:
   "tips": "short practical tip"
 }`;
 
-      const result = await model.generateContent(prompt);
+      // Hard timeout for single-day regeneration too
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT_MS);
+      let result;
+      try {
+        result = await model.generateContent(
+          { contents: [{ role: 'user', parts: [{ text: prompt }] }] },
+          { signal: ctrl.signal }
+        );
+      } finally {
+        clearTimeout(tid);
+      }
       const text = result.response.text().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
       const parsed = JSON.parse(text) as DayPlan;
       console.log(`✅ Gemini regenerated day ${dayNumber} for ${destination}`);

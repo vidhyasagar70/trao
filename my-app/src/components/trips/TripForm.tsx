@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import axiosInstance from '@/lib/axios';
 import { BudgetType, CreateTripPayload, ApiResponse, Trip } from '@/types';
@@ -43,6 +43,19 @@ export default function TripForm() {
   const [interests, setInterests] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Tick elapsed seconds while the AI is generating
+  useEffect(() => {
+    if (isLoading) {
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isLoading]);
 
   const toggleInterest = (value: string) => {
     setInterests((prev) =>
@@ -213,6 +226,19 @@ export default function TripForm() {
       >
         {isLoading ? 'Generating Your Itinerary…' : 'Generate AI Itinerary →'}
       </Button>
+
+      {/* AI status indicator — visible during generation */}
+      {isLoading && (
+        <div className="flex flex-col items-center gap-2 py-2 animate-pulse">
+          <div className="flex items-center gap-2 text-[#666666] text-sm">
+            <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-ping" />
+            <span>AI is crafting your itinerary… ({elapsed}s)</span>
+          </div>
+          <p className="text-xs text-[#999999]">
+            This usually takes 10–30 seconds. Please don&apos;t close the page.
+          </p>
+        </div>
+      )}
     </form>
   );
 }

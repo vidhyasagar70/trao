@@ -6,7 +6,7 @@ const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 120000, // 2 min — AI trip generation (Gemini) can take 30–60 s
 });
 
 // Request interceptor
